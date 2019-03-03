@@ -1,0 +1,59 @@
+package com.app.mytodo.mytodo.config.security;
+
+import com.app.mytodo.mytodo.models.User;
+import com.app.mytodo.mytodo.services.UserService;
+import com.app.mytodo.mytodo.utils.TokenService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+
+import java.util.Optional;
+
+@Component
+public class CustomUsernamePasswordAuthenticationProvider implements AuthenticationProvider {
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private TokenService tokenService;
+
+    @Autowired
+    private PasswordEncoder encoder;
+
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        Optional<String> username = (Optional) authentication.getPrincipal();
+        Optional<String> password = (Optional) authentication.getCredentials();
+
+        if (!username.isPresent() || !password.isPresent()) {
+            throw new BadCredentialsException("Invalid User Credentials");
+        }
+
+        User user = userService.findUserByUserName(username.get());
+        if (user == null) {
+            throw new BadCredentialsException("User not found.");
+        }
+
+        if (!encoder.matches(password.get(), user.getPassword())) {
+            throw new BadCredentialsException("Wrong password.");
+        }
+
+        AuthenticationWithToken authenticationWithToken = new AuthenticationWithToken(user, null, user.getAuthorities());
+        String newToken = tokenService.generateNewToken();
+        authenticationWithToken.setToken(newToken);
+        tokenService.store(newToken, authenticationWithToken);
+
+        return authenticationWithToken;
+    }
+
+    @Override
+    public boolean supports(Class<?> aClass) {
+        return aClass.equals(UsernamePasswordAuthenticationToken.class);
+    }
+}
